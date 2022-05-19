@@ -1,0 +1,5 @@
+name: 'Benchmark action'
+description: 'Runs a benchmark'
+runs:
+  using: 'docker'
+  image: 'docker://econesag/api_benchmark:v1.3'
