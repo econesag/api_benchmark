@@ -1,0 +1,97 @@
+name: Benchmark Reusable Workflow
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_call: 
+    inputs: 
+      git_username:
+        required: true
+        type: string
+      public_repo_name:
+        required: true
+        type: string
+      repo_owner:   
+        required: true
+        type: string
+      email:
+        required: true
+        type: string
+    secrets:
+      GIT_TOKEN:
+        required: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: [ self-hosted ]
+    steps:
+    - uses: actions/checkout@v3
+    - name: Close previous server
+      run: echo "close"
+      #run: docker compose down
+    - name: Launch server
+      run: echo "launch"
+      #run: docker compose up -d 
+  
+  start_energy_measurement:
+    runs-on: [ self-hosted ]
+    needs: build
+    steps:
+    - uses: actions/checkout@v3
+    - name: Start intel power gadget
+      run: Powershell "& 'C:\Program Files\Intel\Power Gadget 3.6\IntelPowerGadget.exe'"
+    - name: Start measurement
+      run: Powershell "& 'C:\Program Files\Intel\Power Gadget 3.6\IntelPowerGadget.exe' -start"
+      
+  execute_benchmark:
+    needs: start_energy_measurement
+    runs-on: ubuntu-latest
+    name: Benchmark API REST
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Launch benchmark
+        uses: econesag/api_benchmark@main
+        id: benchmark
+        env:
+          config: config.yaml
+      - name: Deploy on public repo
+        if: ${{ always() }}
+        env:           
+          REPO_OWNER: ${{ inputs.repo_owner }}
+          USERNAME: ${{ inputs.git_username }}
+          PUBLIC_REPO_NAME: ${{ inputs.public_repo_name }}
+          EMAIL: ${{ inputs.email }}
+          GIT_TOKEN: ${{ secrets.GIT_TOKEN }}
+        run: |
+          # remove git settings and history
+          rm -rf .git
+          # use the new repo
+          git init
+          git config user.name $USERNAME
+          git config user.email $EMAIL
+          git config --global init.defaultBranch main
+          # git remote add origin https://$USERNAME:$GIT_TOKEN@github.com/<repo_owner>/<repo_name>.git
+          git remote add origin https://$USERNAME:$GIT_TOKEN@github.com/$REPO_OWNER/$PUBLIC_REPO_NAME.git
+          mkdir docs
+          cp -r *.html docs/
+          cd docs
+          cp *.html index.html
+          cd ..
+          git add docs
+          git commit -m "New results of benchmark"
+          git push origin HEAD:main --force
+          
+  stop_energy_measurement:
+    runs-on: [ self-hosted ]
+    if: ${{ always() }}
+    needs: execute_benchmark
+    steps:
+    - uses: actions/checkout@v3
+    - name: Stop measurement
+      run: Powershell "& 'C:\Program Files\Intel\Power Gadget 3.6\IntelPowerGadget.exe' -stop"
