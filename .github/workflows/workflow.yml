@@ -28,11 +28,11 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Close previous server
-      run: echo "close"
-      #run: docker compose down
+      #run: echo "close"
+      run: docker compose down
     - name: Launch server
-      run: echo "launch"
-      #run: docker compose up -d 
+      #run: echo "launch"
+      run: docker compose up -d 
   
   start_energy_measurement:
     runs-on: [ self-hosted ]
@@ -91,3 +91,9 @@ jobs:
     - uses: actions/checkout@v3
     - name: Stop measurement
       run: Powershell "& 'C:\Program Files\Intel\Power Gadget 3.6\IntelPowerGadget.exe' -stop"
+      # Add steps
+      # Configure git
+      # Pull public repo
+      # Cleans docs/index.html
+      # Add docs to git index
+      # Commit docs to public repo
