@@ -91,34 +91,9 @@ jobs:
     - uses: actions/checkout@v3
     - name: Stop measurement
       run: Powershell "& 'C:\Program Files\Intel\Power Gadget 3.6\IntelPowerGadget.exe' -stop"
-    - name: Filter html file and add csv results
-      if: ${{ always() }}
-      env:           
-        REPO_OWNER: ${{ inputs.repo_owner }}
-        USERNAME: ${{ inputs.git_username }}
-        PUBLIC_REPO_NAME: ${{ inputs.public_repo_name }}
-        PRIVATE_REPO_NAME: ${{ inputs.private_repo_name }}
-        EMAIL: ${{ inputs.email }}
-        GIT_TOKEN: ${{ secrets.GIT_TOKEN }}
-      run: |
-        # Configure git
-        git init
-        git config user.name $USERNAME
-        git config user.email $EMAIL
-        git config --global init.defaultBranch main
-        # Pull repositories
-        git remote add origin https://$USERNAME:$GIT_TOKEN@github.com/$REPO_OWNER/$PRIVATE_REPO_NAME.git
-        git fetch $PRIVATE_REPO_NAME
-        git checkout $PRIVATE_REPO_NAME/main -- html_filters
-        git remote add origin https://$USERNAME:$GIT_TOKEN@github.com/$REPO_OWNER/$PUBLIC_REPO_NAME.git
-        git pull https://$USERNAME:$GIT_TOKEN@github.com/$REPO_OWNER/$PUBLIC_REPO_NAME.git
-        # Cleans docs/index.html
-        cp html_filters/filter_html_selfhost.py $PUBLIC_REPO_NAME/docs
-        cd $PUBLIC_REPO_NAME/docs
-        python filter_html_selfhost.py
-        rm filter_html_selfhost.py
-        cd ..
-        # Commit docs to public repo
-        git add docs
-        git commit -m "Changed results of benchmark"
-        git push origin HEAD:main --force
+      # Add steps
+      # Configure git
+      # Pull public repo
+      # Cleans docs/index.html
+      # Add docs to git index
+      # Commit docs to public repo
