@@ -34,28 +34,69 @@ jobs:
       #run: echo "launch"
       run: docker compose up -d 
   
-  start_energy_measurement:
+  check_energy_measurement:
     runs-on: [ self-hosted ]
     needs: build
+    name: Energy Measurement
     steps:
     - uses: actions/checkout@v3
-    - name: Start intel power gadget
-      run: Powershell "& 'C:\Program Files\Intel\Power Gadget 3.6\IntelPowerGadget.exe'"
-    - name: Start measurement
-      run: Powershell "& 'C:\Program Files\Intel\Power Gadget 3.6\IntelPowerGadget.exe' -start"
-      
+    - name: Start intel power log
+      run: |
+        $run_time=[int](([string](Powershell "Select-String -Path 'config.yaml' -Pattern 'run_time'").Split(' ')[2]) -replace '"','') * 60
+        echo "Runtime measurement (seconds): $run_time"
+        & "C:\Program Files\Intel\Power Gadget 3.6\PowerLog3.0.exe" -cmd "PowerShell Start-Sleep $run_time"
+        ls
+    - uses: actions/upload-artifact@v2
+      with:
+        name: power_consumption
+        path: PowerLog.csv
+        
   execute_benchmark:
-    needs: start_energy_measurement
+    needs: build
     runs-on: ubuntu-latest
     name: Benchmark API REST
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Launch benchmark
+        continue-on-error: true
         uses: econesag/api_benchmark@main
         id: benchmark
         env:
           config: config.yaml
+      - uses: actions/upload-artifact@v2
+        with:
+          name: html_benchmark
+          path: report1.html
+  
+  filter_results:
+    needs:
+      - execute_benchmark
+      - check_energy_measurement
+    runs-on: ubuntu-latest
+    name: Filter Results
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - uses: actions/download-artifact@v2
+        with:
+          name: power_consumption
+      - uses: actions/download-artifact@v2
+        with:
+          name: html_benchmark
+      - name: Launch benchmark
+        uses: econesag/api_benchmark@main
+        id: benchmark
+        env:
+          config: config.yaml
+      - name: Check Python and Filter script
+        run: |
+          python3 --version
+          echo Y29uc3VtcHRpb25fdGFibGUgPSAiPHN0eWxlPlxuLmNvbnRhaW5lcjIge1xud2lkdGg6IDEwMDBweDtcbm1hcmdpbjogMCBhdXRvO1xucGFkZGluZzogMTBweDtcbmJhY2tncm91bmQ6ICMxNzM1Mjk7XG4iCmNvbnN1bXB0aW9uX3RhYmxlICs9ICJmb250LWZhbWlseTogQXJpYWwsIEhlbHZldGljYSwgc2Fucy1zZXJpZjtcbmZvbnQtc2l6ZTogMTRweDtcbmNvbG9yOiAjZmZmO1xufVxuLmluZm8gc3BhbntcbiIKY29uc3VtcHRpb25fdGFibGUgKz0gImNvbG9yOiAjYjNjM2JjO1xufVxudGFibGUge1xuYm9yZGVyLWNvbGxhcHNlOiBjb2xsYXBzZTtcbnRleHQtYWxpZ246IGNlbnRlcjtcbndpZHRoOiAxMDAlO1xufVxudGQsIHRoIHtcbiIKY29uc3VtcHRpb25fdGFibGUgKz0gImJvcmRlcjogMXB4IHNvbGlkICNjYWQ5ZWE7XG5jb2xvcjogIzY2NjtcbmhlaWdodDogMzBweDtcbn1cbnRoZWFkIHRoIHtcbiIKY29uc3VtcHRpb25fdGFibGUgKz0gImJhY2tncm91bmQtY29sb3I6ICNjY2U4ZWI7XG53aWR0aDogMTAwcHg7XG59XG50cjpudGgtY2hpbGQob2RkKSB7XG5iYWNrZ3JvdW5kOiAjZmZmO1xufVxuIgpjb25zdW1wdGlvbl90YWJsZSArPSAidHI6bnRoLWNoaWxkKGV2ZW4pIHtcbmJhY2tncm91bmQ6ICNmNWZhZmE7XG59XG4uY2hhcnRzLWNvbnRhaW5lciAuY2hhcnQge1xud2lkdGg6IDEwMCU7XG4iCmNvbnN1bXB0aW9uX3RhYmxlICs9ICJoZWlnaHQ6IDM1MHB4O1xubWFyZ2luLWJvdHRvbTogMzBweDtcbn1cbi5kb3dubG9hZCB7XG5mbG9hdDogcmlnaHQ7XG59XG4uZG93bmxvYWQgYSB7XG4iCmNvbnN1bXB0aW9uX3RhYmxlICs9ICJjb2xvcjogIzAwY2E1YTtcbn1cbi5ncmFwaCB7XG5tYXJnaW4tYm90dG9tOiAxZW07XG59XG48L3N0eWxlPlxuPGRpdiBjbGFzcz1cImNvbnRhaW5lcjJcIj5cbiIKY29uc3VtcHRpb25fdGFibGUgKz0gIjxoMj5Qb3dlciBDb25zdW1wdGlvbiBNZXRyaWNzPC9oMj5cbjx0YWJsZSBjbGFzcz1cImRlZmF1bHRcIj5cbiI7IGlzX21ldHJpY3MgPSBGYWxzZQp3aXRoIG9wZW4oIlBvd2VyTG9nLmNzdiIsICJyIiwgZW5jb2Rpbmc9J3V0Zi04JykgYXMgZjogCiAgICBmb3IgbGluZSBpbiBmOgogICAgICAgIGlmICdUb3RhbCBFbGFwc2VkIFRpbWUnIGluIGxpbmU6IGlzX21ldHJpY3MgPSBUcnVlCiAgICAgICAgaWYgaXNfbWV0cmljcyBhbmQgbGVuKGxpbmUuc3BsaXQoJyA9ICcpKSA+IDEgYW5kICgnVGltZScgaW4gbGluZSBvciAnRnJlcXVlbmN5JyBpbiBsaW5lIG9yICdQcm9jZXNzb3InIGluIGxpbmUpOgogICAgICAgICAgICBjb25zdW1wdGlvbl90YWJsZSArPSAiPHRyPlxuIjsgY29uc3VtcHRpb25fdGFibGUgKz0gIjx0ZD4iK2xpbmUuc3BsaXQoJyA9ICcpWzBdKyI8L3RkPlxuIgogICAgICAgICAgICBjb25zdW1wdGlvbl90YWJsZSArPSAiPHRkPiIrbGluZS5zcGxpdCgnID0gJylbMV0rIjwvdGQ+XG4iOyBjb25zdW1wdGlvbl90YWJsZSArPSAiPC90cj5cbiIKICAgIGNvbnN1bXB0aW9uX3RhYmxlICs9ICI8L3RhYmxlPlxuPC9ib2R5PiIKaW1wb3J0IG9zOyBvcy5yZW1vdmUoIlBvd2VyTG9nLmNzdiIpCndpdGggb3BlbigicmVwb3J0MS5odG1sIiwgInIiLCBlbmNvZGluZz0ndXRmLTgnKSBhcyBmOiBjbGVhbl9odG1sID0gZi5yZWFkKCk7IGNsZWFuX2h0bWw9Y2xlYW5faHRtbC5yZXBsYWNlKCc8L2JvZHk+JywgY29uc3VtcHRpb25fdGFibGUpCndpdGggb3BlbigicmVwb3J0MS5odG1sIiwgInciLCBlbmNvZGluZz0ndXRmLTgnKSBhcyBmOiBmLndyaXRlKGNsZWFuX2h0bWwp | base64 -d > filter.py
+          cat filter.py
+      - name: Run Filter script
+        run: |
+          python3 filter.py
       - name: Deploy on public repo
         if: ${{ always() }}
         env:           
@@ -82,18 +123,4 @@ jobs:
           git add docs
           git commit -m "New results of benchmark"
           git push origin HEAD:main --force
-          
-  stop_energy_measurement:
-    runs-on: [ self-hosted ]
-    if: ${{ always() }}
-    needs: execute_benchmark
-    steps:
-    - uses: actions/checkout@v3
-    - name: Stop measurement
-      run: Powershell "& 'C:\Program Files\Intel\Power Gadget 3.6\IntelPowerGadget.exe' -stop"
-      # Add steps
-      # Configure git
-      # Pull public repo
-      # Cleans docs/index.html
-      # Add docs to git index
-      # Commit docs to public repo
+      
